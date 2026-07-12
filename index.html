@@ -230,7 +230,8 @@
             const y = (1 - t) * (1 - t) * p0.y + 2 * (1 - t) * t * p1.y + t * t * p2.y;
             const dx = 2 * (1 - t) * (p1.x - p0.x) + 2 * t * (p2.x - p1.x);
             const dy = 2 * (1 - t) * (p1.y - p0.y) + 2 * t * (p2.y - p1.y);
-            let angle = Math.atan2(dy, dx) * 180 / Math.PI + 180;
+            // Icon points up by default; +90 aligns the nose with the travel direction (toward Milano)
+            let angle = Math.atan2(dy, dx) * 180 / Math.PI + 90;
             return { x, y, angle };
         }
 
