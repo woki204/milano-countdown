@@ -83,24 +83,29 @@
             border-color: #8B0000;
         }
 
-        /* Drifting text fragments — extreme minimalist, lots of breathing space */
+        /* Drifting text fragments — extreme minimalist, lots of breathing space.
+           Rendered inside an SVG <foreignObject> so it always sits above the scene band. */
         #poetry {
-            position: absolute;
-            left: 50%;
-            bottom: 7%;
-            transform: translateX(-50%);
-            width: min(78%, 30rem);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
             text-align: center;
             font-family: 'Inter', sans-serif;
             font-weight: 200;
-            font-size: clamp(11px, 2.5vw, 15px);
-            line-height: 1.75;
+            font-size: 13px;
+            line-height: 1.5;
             letter-spacing: 0.015em;
             color: #A1A1A6;
             opacity: 0;
             transition: opacity 3s ease;
             pointer-events: none;
-            will-change: opacity;
+        }
+        /* Bottom silhouette scene band that illustrates each fragment */
+        #stage {
+            opacity: 0;
+            transition: opacity 3s ease;
         }
     </style>
 </head>
@@ -191,9 +196,12 @@
                         <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" fill="#000000"/>
                     </g>
                 </g>
-            </svg>
+                <g id="stage" fill="#000000"></g>
 
-            <div id="poetry"></div>
+                <foreignObject x="70" y="298" width="430" height="48">
+                    <div xmlns="http://www.w3.org/1999/xhtml" id="poetry"></div>
+                </foreignObject>
+            </svg>
 
         </div>
     </section>
@@ -499,16 +507,110 @@
             "We always found our way back to one another."
         ];
 
+        /* ── Silhouette scene library (solid black, like the man) — a decorative bottom
+              band whose picture matches the current fragment ── */
+        const GY = 414;   // ground baseline (viewBox units)
+
+        function cyp(cx, h) {                       // cypress — narrow flame
+            const w = h * 0.13;
+            return `<path d="M ${cx},${GY} C ${cx-w},${GY-h*0.3} ${cx-w},${GY-h*0.72} ${cx},${GY-h} C ${cx+w},${GY-h*0.72} ${cx+w},${GY-h*0.3} ${cx},${GY} Z"/>`;
+        }
+        function fir(cx, h) {                       // fir — pointed tiers
+            const w = h * 0.46;
+            let out = `<rect x="${(cx-h*0.03).toFixed(1)}" y="${(GY-h*0.1).toFixed(1)}" width="${(h*0.06).toFixed(1)}" height="${(h*0.12).toFixed(1)}"/>`;
+            for (let k = 0; k < 3; k++) {
+                const yb = GY - h*0.08 - k*h*0.27, yt = yb - h*0.4, ww = w*(1 - k*0.22);
+                out += `<path d="M ${cx},${yt.toFixed(1)} L ${(cx-ww/2).toFixed(1)},${yb.toFixed(1)} L ${(cx+ww/2).toFixed(1)},${yb.toFixed(1)} Z"/>`;
+            }
+            return out;
+        }
+        function pin(cx, h) {                       // umbrella pine
+            let out = `<rect x="${(cx-h*0.028).toFixed(1)}" y="${(GY-h*0.55).toFixed(1)}" width="${(h*0.056).toFixed(1)}" height="${(h*0.55).toFixed(1)}"/>`;
+            out += `<ellipse cx="${cx}" cy="${(GY-h*0.68).toFixed(1)}" rx="${(h*0.3).toFixed(1)}" ry="${(h*0.17).toFixed(1)}"/>`;
+            out += `<ellipse cx="${(cx-h*0.17).toFixed(1)}" cy="${(GY-h*0.6).toFixed(1)}" rx="${(h*0.16).toFixed(1)}" ry="${(h*0.11).toFixed(1)}"/>`;
+            out += `<ellipse cx="${(cx+h*0.17).toFixed(1)}" cy="${(GY-h*0.6).toFixed(1)}" rx="${(h*0.16).toFixed(1)}" ry="${(h*0.11).toFixed(1)}"/>`;
+            return out;
+        }
+        function fig(cx, h) {                       // standing figure
+            return `<g transform="translate(${cx},${GY}) scale(${(h/22).toFixed(3)})"><circle cx="0" cy="-19.5" r="2.8"/><path d="M -3.5,-6 L -4,-15 Q -4,-17 -2,-17 L 2,-17 Q 4,-17 4,-15 L 3.5,-6 Z"/><path d="M -3.5,-6 L -3,0 L -1,0 L -0.4,-6 Z"/><path d="M 0.4,-6 L 1,0 L 3,0 L 3.5,-6 Z"/><path d="M -3.8,-14.5 L -5.8,-8 L -4.8,-7.6 L -3,-14 Z"/><path d="M 3,-14.5 L 5,-19 L 6,-18.5 L 4,-14 Z"/></g>`;
+        }
+        function walk(cx, h, dir) {                 // walking figure (dir +1 right / -1 left)
+            return `<g transform="translate(${cx},${GY}) scale(${((dir||1)*(h/22)).toFixed(3)},${(h/22).toFixed(3)})"><circle cx="0" cy="-19.5" r="2.8"/><path d="M -3.5,-6 L -4,-15 Q -4,-17 -2,-17 L 2,-17 Q 4,-17 4,-15 L 3.5,-6 Z"/><path d="M -3.5,-6 L -5.5,0 L -3.5,0 L -1,-6 Z"/><path d="M 0.5,-6 L 3.5,0 L 5.5,0 L 2.5,-6 Z"/><path d="M -3.6,-14.5 L -6,-9.5 L -5,-9 L -3,-14 Z"/><path d="M 3,-14 L 6.2,-11 L 7,-11.6 L 4,-13.6 Z"/></g>`;
+        }
+        function earth() { return `<rect x="55" y="${GY}" width="460" height="${420-GY}"/>`; }
+
+        const scenes = {
+            forest() {
+                let s = earth();
+                const kinds = [cyp, fir, cyp, pin, fir, cyp, fir, pin];
+                let ti = 0;
+                for (let x = 60; x <= 510; x += 12) {
+                    if (x > 268 && x < 308) continue;              // clearing for the couple
+                    s += kinds[ti % kinds.length](x, 44 + ((x * 13) % 19)); ti++;
+                }
+                return s + fig(285, 30) + fig(297, 33);
+            },
+            embrace() {
+                let s = earth();
+                s += fir(120, 50) + cyp(150, 54) + cyp(168, 46) + cyp(392, 52) + cyp(410, 46) + fir(440, 50);
+                return s + fig(285, 34) + fig(296, 34);            // a couple, close together
+            },
+            mountains() {
+                let s = earth();
+                const ridge = [[55,GY-18],[110,GY-52],[160,GY-30],[215,GY-60],[285,GY-38],[350,GY-58],[420,GY-40],[480,GY-54],[515,GY-22]];
+                let d = `M 55,${GY} `;
+                ridge.forEach(p => d += `L ${p[0]},${p[1].toFixed(1)} `);
+                s += `<path d="${d}L 515,${GY} Z"/>`;
+                return s + fig(250, 26) + fig(266, 24);            // two small climbers
+            },
+            road() {
+                let s = earth();
+                s += fir(110, 52) + cyp(140, 44) + pin(420, 54) + cyp(452, 42);
+                return s + walk(250, 32, 1) + walk(272, 32, 1);    // walking together
+            },
+            sea() {
+                let d = `M 55,420 L 55,${GY-4} `;
+                for (let x = 55; x <= 515; x += 16) d += `L ${x},${(GY - 4 + Math.sin(x/15)*3).toFixed(1)} `;
+                let s = `<path d="${d}L 515,420 Z"/>`;
+                return s + fig(95, 30) + fig(475, 30);             // far apart across the sea
+            },
+            reunion() {
+                let s = earth();
+                s += fir(70, 44) + cyp(95, 46) + cyp(462, 46) + fir(490, 44);
+                return s + walk(258, 33, 1) + walk(300, 33, -1);   // walking toward each other
+            },
+            writing() {
+                let s = earth();
+                s += `<rect x="272" y="${GY-13}" width="46" height="3.5"/><rect x="273" y="${GY-13}" width="3" height="13"/><rect x="314" y="${GY-13}" width="3" height="13"/>`;
+                s += `<g transform="translate(262,${GY})"><circle cx="2" cy="-19" r="3.2"/><path d="M -3,-15 Q 0,-17 4,-15 L 6,-8 L -4,-8 Z"/><rect x="-4" y="-8" width="9" height="4"/><rect x="-4" y="-8" width="3.5" height="8"/><path d="M 3,-13 L 9,-11 L 9.5,-12.5 L 4,-14.5 Z"/></g>`;
+                return s + cyp(372, 50) + cyp(388, 42) + fir(410, 46);
+            }
+        };
+
+        // fragment index → scene key (aligned to the fragments array)
+        const fragScene = ['writing','writing','mountains','embrace','forest','road','sea','reunion','reunion','reunion','reunion','road','forest','embrace','reunion'];
+
+        const stageEl = document.getElementById('stage');
         const poetryEl = document.getElementById('poetry');
         let fragIdx = Math.floor(Math.random() * fragments.length);
 
+        // Parse an SVG-markup string and place it inside the stage group.
+        function setStage(markup) {
+            const doc = new DOMParser().parseFromString(
+                `<svg xmlns="http://www.w3.org/2000/svg">${markup}</svg>`, 'image/svg+xml');
+            while (stageEl.firstChild) stageEl.removeChild(stageEl.firstChild);
+            Array.from(doc.documentElement.childNodes).forEach(n => stageEl.appendChild(document.importNode(n, true)));
+        }
+
         function showFragment() {
-            poetryEl.textContent = fragments[fragIdx % fragments.length];
+            const i = fragIdx % fragments.length;
+            poetryEl.textContent = fragments[i];
+            setStage(scenes[fragScene[i]]());
             fragIdx++;
             // fade in (small timeout so the transition reliably triggers, even in background tabs)
-            setTimeout(() => { poetryEl.style.opacity = '1'; }, 40);
+            setTimeout(() => { poetryEl.style.opacity = '1'; stageEl.style.opacity = '1'; }, 40);
             const hold = 9000;          // stay ~9s
-            setTimeout(() => { poetryEl.style.opacity = '0'; }, hold);
+            setTimeout(() => { poetryEl.style.opacity = '0'; stageEl.style.opacity = '0'; }, hold);
             // schedule next: after fade-out (3s) + a long quiet gap
             const gap = 14000 + Math.random() * 12000;   // 14–26s of silence
             setTimeout(showFragment, hold + 3000 + gap);
