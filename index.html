@@ -84,7 +84,7 @@
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col justify-between p-6 max-w-md mx-auto">
+<body class="min-h-screen flex flex-col p-4 sm:p-6 max-w-3xl mx-auto">
 
     <header class="text-center pt-8 relative">
         <div class="absolute right-0 top-6">
@@ -94,25 +94,25 @@
             </div>
         </div>
         <span id="eyebrow" class="text-[11px] font-medium tracking-[0.15em] text-zinc-400 uppercase">COUNTDOWN</span>
-        <h1 class="text-3xl font-light tracking-tight text-zinc-900 mt-1">Milano</h1>
+        <h1 class="text-3xl sm:text-4xl font-light tracking-tight text-zinc-900 mt-1">Milano</h1>
     </header>
 
-    <section class="my-auto py-6">
+    <section class="py-4 sm:py-6">
         <div class="grid grid-cols-4 gap-2 text-center">
             <div>
-                <div id="days" class="text-5xl font-extralight tracking-tighter tabular-nums text-black">00</div>
+                <div id="days" class="text-4xl sm:text-5xl md:text-6xl font-extralight tracking-tighter tabular-nums text-black">00</div>
                 <div id="lbl-days" class="text-[10px] font-normal text-zinc-400 mt-1">days</div>
             </div>
             <div>
-                <div id="hours" class="text-5xl font-extralight tracking-tighter tabular-nums text-black">00</div>
+                <div id="hours" class="text-4xl sm:text-5xl md:text-6xl font-extralight tracking-tighter tabular-nums text-black">00</div>
                 <div id="lbl-hours" class="text-[10px] font-normal text-zinc-400 mt-1">hours</div>
             </div>
             <div>
-                <div id="minutes" class="text-5xl font-extralight tracking-tighter tabular-nums text-black">00</div>
+                <div id="minutes" class="text-4xl sm:text-5xl md:text-6xl font-extralight tracking-tighter tabular-nums text-black">00</div>
                 <div id="lbl-minutes" class="text-[10px] font-normal text-zinc-400 mt-1">minutes</div>
             </div>
             <div>
-                <div id="seconds" class="text-5xl font-extralight tracking-tighter tabular-nums text-zinc-300">00</div>
+                <div id="seconds" class="text-4xl sm:text-5xl md:text-6xl font-extralight tracking-tighter tabular-nums text-zinc-300">00</div>
                 <div id="lbl-seconds" class="text-[10px] font-normal text-zinc-400 mt-1">seconds</div>
             </div>
         </div>
@@ -124,10 +124,10 @@
         </div>
     </section>
 
-    <section class="w-full mb-12">
-        <div class="relative w-full aspect-[4/3] bg-white border border-zinc-100 rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+    <section class="flex-1 flex flex-col w-full mb-4 sm:mb-6 min-h-[340px]">
+        <div class="relative flex-1 min-h-0 w-full bg-white border border-zinc-100 rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
 
-            <svg id="map" class="w-full h-full" viewBox="0 0 600 450" xmlns="http://www.w3.org/2000/svg">
+            <svg id="map" class="absolute inset-0 w-full h-full" viewBox="55 70 460 350" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                     <linearGradient id="balloonGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stop-color="#e83b3b" />
@@ -148,12 +148,8 @@
                 <circle cx="200" cy="250" r="3" fill="#000000" />
                 <text x="200" y="270" text-anchor="middle" class="text-[10px] font-medium fill-black">Milano</text>
 
-                <!-- Waiting man on Milano: solid-black figure holding a dark-red square 'balloon' on a thin string -->
+                <!-- Waiting man on Milano: solid-black figure (balloon + string live in global coords below) -->
                 <g id="waiting-man" transform="translate(200, 250)">
-                    <path id="balloon-string" d="M 6.5,-22 C 8.9,-27 4.6,-31 6.8,-36 C 9,-41 4.5,-45 6.8,-50 C 8.7,-54 6.4,-55.5 8,-58" fill="none" stroke="#000000" stroke-width="0.35" stroke-linecap="round" />
-                    <g id="balloon" transform="translate(0, 0)">
-                        <rect x="2" y="-70" width="12" height="12" rx="1.3" fill="url(#balloonGrad)" />
-                    </g>
                     <g fill="#000000">
                         <circle cx="0" cy="-19.5" r="2.8" />
                         <path d="M -3.5,-6 L -4,-15 Q -4,-17 -2,-17 L 2,-17 Q 4,-17 4,-15 L 3.5,-6 Z" />
@@ -162,6 +158,12 @@
                         <path d="M -3.8,-14.5 L -5.8,-8 L -4.8,-7.6 L -3,-14 Z" />
                         <path d="M 3,-14.5 L 6,-22 L 7,-21.5 L 4,-14 Z" />
                     </g>
+                </g>
+
+                <!-- Balloon + kite-like string (global coords; driven by JS) -->
+                <path id="balloon-string" fill="none" stroke="#000000" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" />
+                <g id="balloon" transform="translate(212, 150)">
+                    <rect x="-6" y="-6" width="12" height="12" rx="1.3" fill="url(#balloonGrad)" />
                 </g>
 
                 <g id="airplane" transform="translate(460, 170)">
@@ -315,32 +317,80 @@
         updateCountdown();
         setInterval(updateCountdown, 1000);
 
-        /* ── Balloon release: every ~3–5 hours the red square drifts up into the sky
-              over 2 minutes, vanishes, then returns to the man waiting in Milano ── */
-        const RISE_DURATION = 120000;   // 2 minutes up
-        const RISE_DX = -14, RISE_DY = -250; // drift up-and-left, off the top of the map
+        /* ── Balloon: rests above the man on a long kite-like string; every ~3–5 hours it
+              drifts naturally across the sky toward wherever the plane is, then returns ── */
+        const HAND = { x: 206.5, y: 228 };        // man's hand (global SVG coords)
+        const BALLOON_REST = { x: 212, y: 150 };  // resting balloon centre
+        const FLIGHT_DURATION = 90000;            // ~1.5 min of slow, natural drift
+        const STRING_LEN = 80;                    // trailing kite-string length
         let balloonFlying = false;
+
+        const balloonEl = document.getElementById('balloon');
+        const stringEl = document.getElementById('balloon-string');
+
+        function setBalloon(x, y, tilt) {
+            balloonEl.setAttribute('transform', `translate(${x}, ${y}) rotate(${tilt || 0})`);
+        }
+
+        // At rest: one gentle kite-like curve from the man's hand up to the balloon.
+        function setRestString() {
+            const bx = BALLOON_REST.x, by = BALLOON_REST.y + 6;               // balloon bottom
+            const cx = (HAND.x + bx) / 2 - 7, cy = (HAND.y + by) / 2 + 5;      // soft single bow
+            stringEl.setAttribute('d', `M ${HAND.x},${HAND.y} Q ${cx},${cy} ${bx},${by}`);
+        }
+
+        // In flight: a long string trailing behind the balloon along -velocity, gently drooping.
+        function setTrailingString(x, y, vx, vy) {
+            const len = Math.hypot(vx, vy) || 1;
+            const nx = vx / len, ny = vy / len;
+            const ex = x - nx * STRING_LEN,        ey = y - ny * STRING_LEN + 16;
+            const c1x = x - nx * STRING_LEN * 0.35, c1y = y - ny * STRING_LEN * 0.35 + 4;
+            const c2x = x - nx * STRING_LEN * 0.7,  c2y = y - ny * STRING_LEN * 0.7 + 11;
+            stringEl.setAttribute('d', `M ${x},${y} C ${c1x},${c1y} ${c2x},${c2y} ${ex},${ey}`);
+        }
+
+        function quad(a, c, b, t) {
+            const mt = 1 - t;
+            return {
+                x: mt*mt*a.x + 2*mt*t*c.x + t*t*b.x,
+                y: mt*mt*a.y + 2*mt*t*c.y + t*t*b.y,
+                dx: 2*mt*(c.x - a.x) + 2*t*(b.x - c.x),
+                dy: 2*mt*(c.y - a.y) + 2*t*(b.y - c.y)
+            };
+        }
+
+        function planePos() {
+            const m = document.getElementById('airplane').getAttribute('transform')
+                .match(/translate\(([-\d.]+), ([-\d.]+)\)/);
+            return { x: +m[1], y: +m[2] };
+        }
 
         function animateBalloonRelease() {
             if (balloonFlying) return;
             balloonFlying = true;
-            const balloon = document.getElementById('balloon');
-            const string = document.getElementById('balloon-string');
 
-            balloon.style.transition = 'none';          // JS drives position/opacity per frame
-            string.style.transition = 'opacity 1.5s ease';
-            string.style.opacity = '0';                 // the man lets go of the string
+            const start = { x: BALLOON_REST.x, y: BALLOON_REST.y };
+            const end = planePos();                                   // wherever the plane is now
+            const ctrl = { x: (start.x + end.x) / 2, y: Math.min(start.y, end.y) - 75 }; // lofted arc
 
-            const start = performance.now();
+            balloonEl.style.transition = 'none';
+            stringEl.style.transition = 'none';
+            const t0 = performance.now();
+
             function frame(now) {
-                let p = (now - start) / RISE_DURATION;
+                let p = (now - t0) / FLIGHT_DURATION;
                 if (p > 1) p = 1;
-                const dx = RISE_DX * p;
-                const dy = RISE_DY * p;
+                const e = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p + 2, 2) / 2;  // ease-in-out
+                const b = quad(start, ctrl, end, e);
+                const sway = Math.sin((now - t0) / 1400) * 4;               // gentle air drift
+                const x = b.x + sway, y = b.y;
+                const tilt = Math.sin((now - t0) / 1400) * 7;
+                setBalloon(x, y, tilt);
+                setTrailingString(x, y, b.dx, b.dy);
                 let op = 1;
-                if (p > 0.6) op = Math.max(0, 1 - (p - 0.6) / 0.4); // fade into the sky near the end
-                balloon.setAttribute('transform', `translate(${dx}, ${dy})`);
-                balloon.style.opacity = String(op);
+                if (p > 0.78) op = Math.max(0, 1 - (p - 0.78) / 0.22);       // fade into the distance
+                balloonEl.style.opacity = String(op);
+                stringEl.style.opacity = String(op);
                 if (p < 1) requestAnimationFrame(frame);
                 else returnBalloon();
             }
@@ -348,17 +398,17 @@
         }
 
         function returnBalloon() {
-            const balloon = document.getElementById('balloon');
-            const string = document.getElementById('balloon-string');
-            // reset to the hand while invisible, then gently fade back in
-            balloon.setAttribute('transform', 'translate(0, 0)');
-            balloon.style.transition = 'none';
-            balloon.style.opacity = '0';
+            setBalloon(BALLOON_REST.x, BALLOON_REST.y, 0);
+            setRestString();
+            balloonEl.style.transition = 'none';
+            stringEl.style.transition = 'none';
+            balloonEl.style.opacity = '0';
+            stringEl.style.opacity = '0';
             requestAnimationFrame(() => {
-                balloon.style.transition = 'opacity 2s ease';
-                balloon.style.opacity = '1';
-                string.style.transition = 'opacity 2s ease';
-                string.style.opacity = '1';
+                balloonEl.style.transition = 'opacity 2.5s ease';
+                stringEl.style.transition = 'opacity 2.5s ease';
+                balloonEl.style.opacity = '1';
+                stringEl.style.opacity = '1';
             });
             balloonFlying = false;
             scheduleNextRelease();
@@ -369,6 +419,9 @@
             setTimeout(animateBalloonRelease, delay);
         }
 
+        // initial resting state
+        setBalloon(BALLOON_REST.x, BALLOON_REST.y, 0);
+        setRestString();
         scheduleNextRelease();
 
         /* ── Private preview button ──
