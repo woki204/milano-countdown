@@ -115,8 +115,10 @@
 
                 <!-- Waiting man on Milano: solid-black figure holding a dark-red square 'balloon' on a thin string -->
                 <g id="waiting-man" transform="translate(200, 250)">
-                    <line x1="6.5" y1="-22" x2="9" y2="-39.5" stroke="#000000" stroke-width="0.5" />
-                    <rect x="4.5" y="-48.5" width="9" height="9" fill="#8B0000" />
+                    <line id="balloon-string" x1="6.5" y1="-22" x2="9" y2="-39.5" stroke="#000000" stroke-width="0.5" />
+                    <g id="balloon" transform="translate(0, 0)">
+                        <rect x="4.5" y="-48.5" width="9" height="9" fill="#8B0000" />
+                    </g>
                     <g fill="#000000">
                         <circle cx="0" cy="-19.5" r="2.8" />
                         <path d="M -3.5,-6 L -4,-15 Q -4,-17 -2,-17 L 2,-17 Q 4,-17 4,-15 L 3.5,-6 Z" />
@@ -275,6 +277,62 @@
         setLang(lang);
         updateCountdown();
         setInterval(updateCountdown, 1000);
+
+        /* ── Balloon release: every ~3–5 hours the red square drifts up into the sky
+              over 2 minutes, vanishes, then returns to the man waiting in Milano ── */
+        const RISE_DURATION = 120000;   // 2 minutes up
+        const RISE_DX = -14, RISE_DY = -250; // drift up-and-left, off the top of the map
+        let balloonFlying = false;
+
+        function animateBalloonRelease() {
+            if (balloonFlying) return;
+            balloonFlying = true;
+            const balloon = document.getElementById('balloon');
+            const string = document.getElementById('balloon-string');
+
+            balloon.style.transition = 'none';          // JS drives position/opacity per frame
+            string.style.transition = 'opacity 1.5s ease';
+            string.style.opacity = '0';                 // the man lets go of the string
+
+            const start = performance.now();
+            function frame(now) {
+                let p = (now - start) / RISE_DURATION;
+                if (p > 1) p = 1;
+                const dx = RISE_DX * p;
+                const dy = RISE_DY * p;
+                let op = 1;
+                if (p > 0.6) op = Math.max(0, 1 - (p - 0.6) / 0.4); // fade into the sky near the end
+                balloon.setAttribute('transform', `translate(${dx}, ${dy})`);
+                balloon.style.opacity = String(op);
+                if (p < 1) requestAnimationFrame(frame);
+                else returnBalloon();
+            }
+            requestAnimationFrame(frame);
+        }
+
+        function returnBalloon() {
+            const balloon = document.getElementById('balloon');
+            const string = document.getElementById('balloon-string');
+            // reset to the hand while invisible, then gently fade back in
+            balloon.setAttribute('transform', 'translate(0, 0)');
+            balloon.style.transition = 'none';
+            balloon.style.opacity = '0';
+            requestAnimationFrame(() => {
+                balloon.style.transition = 'opacity 2s ease';
+                balloon.style.opacity = '1';
+                string.style.transition = 'opacity 2s ease';
+                string.style.opacity = '1';
+            });
+            balloonFlying = false;
+            scheduleNextRelease();
+        }
+
+        function scheduleNextRelease() {
+            const delay = 3 * 3600000 + Math.random() * (2 * 3600000); // 3–5 hours
+            setTimeout(animateBalloonRelease, delay);
+        }
+
+        scheduleNextRelease();
     </script>
 </body>
 </html>
