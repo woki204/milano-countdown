@@ -82,6 +82,26 @@
             color: #8B0000;
             border-color: #8B0000;
         }
+
+        /* Drifting text fragments — extreme minimalist, lots of breathing space */
+        #poetry {
+            position: absolute;
+            left: 50%;
+            bottom: 7%;
+            transform: translateX(-50%);
+            width: min(78%, 30rem);
+            text-align: center;
+            font-family: 'Inter', sans-serif;
+            font-weight: 200;
+            font-size: clamp(11px, 2.5vw, 15px);
+            line-height: 1.75;
+            letter-spacing: 0.015em;
+            color: #A1A1A6;
+            opacity: 0;
+            transition: opacity 3s ease;
+            pointer-events: none;
+            will-change: opacity;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col p-4 sm:p-6 max-w-3xl mx-auto">
@@ -161,7 +181,7 @@
                 </g>
 
                 <!-- Balloon + kite-like string (global coords; driven by JS) -->
-                <path id="balloon-string" fill="none" stroke="#000000" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" />
+                <path id="balloon-string" fill="none" stroke="#1a1a1a" stroke-width="0.5" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" />
                 <g id="balloon" transform="translate(212, 150)">
                     <rect x="-6" y="-6" width="12" height="12" rx="1.3" fill="url(#balloonGrad)" />
                 </g>
@@ -172,6 +192,8 @@
                     </g>
                 </g>
             </svg>
+
+            <div id="poetry"></div>
 
         </div>
     </section>
@@ -321,8 +343,8 @@
               drifts naturally across the sky toward wherever the plane is, then returns ── */
         const HAND = { x: 206.5, y: 228 };        // man's hand (global SVG coords)
         const BALLOON_REST = { x: 212, y: 150 };  // resting balloon centre
-        const FLIGHT_DURATION = 90000;            // ~1.5 min of slow, natural drift
-        const STRING_LEN = 80;                    // trailing kite-string length
+        const FLIGHT_DURATION = 30000;            // ~30s of visible, natural drift
+        const STRING_LEN = 74;                    // trailing kite-string length
         let balloonFlying = false;
 
         const balloonEl = document.getElementById('balloon');
@@ -339,14 +361,38 @@
             stringEl.setAttribute('d', `M ${HAND.x},${HAND.y} Q ${cx},${cy} ${bx},${by}`);
         }
 
-        // In flight: a long string trailing behind the balloon along -velocity, gently drooping.
-        function setTrailingString(x, y, vx, vy) {
+        // In flight: a long, wispy hair-like string trailing behind the balloon and
+        // fluttering in the air — sampled points offset by a travelling sine wave.
+        function setTrailingString(x, y, vx, vy, now) {
             const len = Math.hypot(vx, vy) || 1;
-            const nx = vx / len, ny = vy / len;
-            const ex = x - nx * STRING_LEN,        ey = y - ny * STRING_LEN + 16;
-            const c1x = x - nx * STRING_LEN * 0.35, c1y = y - ny * STRING_LEN * 0.35 + 4;
-            const c2x = x - nx * STRING_LEN * 0.7,  c2y = y - ny * STRING_LEN * 0.7 + 11;
-            stringEl.setAttribute('d', `M ${x},${y} C ${c1x},${c1y} ${c2x},${c2y} ${ex},${ey}`);
+            const nx = vx / len, ny = vy / len;   // forward (velocity) unit
+            const px = -ny, py = nx;              // perpendicular unit
+            const N = 7;
+            const pts = [[x, y]];
+            for (let i = 1; i <= N; i++) {
+                const f = i / N;
+                let bx = x - nx * STRING_LEN * f;
+                let by = y - ny * STRING_LEN * f + 11 * f * f;   // soft gravity droop toward the tail
+                const amp = 3.4 * f;                             // flutter grows toward the free end
+                const wave = Math.sin(f * 5.5 - now / 340);
+                bx += px * amp * wave;
+                by += py * amp * wave;
+                pts.push([bx, by]);
+            }
+            stringEl.setAttribute('d', smoothPath(pts));
+        }
+
+        // Smooth curve through points (quadratic segments via midpoints) — no sharp corners.
+        function smoothPath(pts) {
+            let d = `M ${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+            for (let i = 1; i < pts.length - 1; i++) {
+                const mx = (pts[i][0] + pts[i + 1][0]) / 2;
+                const my = (pts[i][1] + pts[i + 1][1]) / 2;
+                d += ` Q ${pts[i][0].toFixed(1)},${pts[i][1].toFixed(1)} ${mx.toFixed(1)},${my.toFixed(1)}`;
+            }
+            const last = pts[pts.length - 1];
+            d += ` L ${last[0].toFixed(1)},${last[1].toFixed(1)}`;
+            return d;
         }
 
         function quad(a, c, b, t) {
@@ -371,7 +417,7 @@
 
             const start = { x: BALLOON_REST.x, y: BALLOON_REST.y };
             const end = planePos();                                   // wherever the plane is now
-            const ctrl = { x: (start.x + end.x) / 2, y: Math.min(start.y, end.y) - 75 }; // lofted arc
+            const ctrl = { x: (start.x + end.x) / 2, y: Math.min(start.y, end.y) - 35 }; // gentle arc
 
             balloonEl.style.transition = 'none';
             stringEl.style.transition = 'none';
@@ -380,15 +426,15 @@
             function frame(now) {
                 let p = (now - t0) / FLIGHT_DURATION;
                 if (p > 1) p = 1;
-                const e = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p + 2, 2) / 2;  // ease-in-out
+                const e = 1 - (1 - p) * (1 - p);  // ease-out: departs promptly, glides to the plane
                 const b = quad(start, ctrl, end, e);
                 const sway = Math.sin((now - t0) / 1400) * 4;               // gentle air drift
                 const x = b.x + sway, y = b.y;
                 const tilt = Math.sin((now - t0) / 1400) * 7;
                 setBalloon(x, y, tilt);
-                setTrailingString(x, y, b.dx, b.dy);
+                setTrailingString(x, y, b.dx, b.dy, now);
                 let op = 1;
-                if (p > 0.78) op = Math.max(0, 1 - (p - 0.78) / 0.22);       // fade into the distance
+                if (p > 0.85) op = Math.max(0, 1 - (p - 0.85) / 0.15);       // fade into the distance
                 balloonEl.style.opacity = String(op);
                 stringEl.style.opacity = String(op);
                 if (p < 1) requestAnimationFrame(frame);
@@ -432,6 +478,43 @@
         if (localStorage.getItem('milano-dev') === '1') {
             document.getElementById('devTestBtn').style.display = 'block';
         }
+
+        /* ── Drifting memories: short fragments fade in and out of the space, one at a time,
+              with long quiet gaps between them. Add more lines to this list over time. ── */
+        const fragments = [
+            "Do you remember how I used to write poems to you?",
+            "The unfinished story about the Second World War.",
+            "Our climb to Lake Devero.",
+            "You held me, and told me I was no longer alone.",
+            "We stood among the trees, the forest all around.",
+            "So many roads together — art, history, religion.",
+            "An entire sea lay between us.",
+            "But never for long.",
+            "We always knew how to find our way back.",
+            "Not the sea between us, but every return.",
+            "Not the turned backs, but the turning toward each other again.",
+            "The poems. The unfinished story. The roads.",
+            "The trees. The forest. Lake Devero.",
+            "Your embrace.",
+            "We always found our way back to one another."
+        ];
+
+        const poetryEl = document.getElementById('poetry');
+        let fragIdx = Math.floor(Math.random() * fragments.length);
+
+        function showFragment() {
+            poetryEl.textContent = fragments[fragIdx % fragments.length];
+            fragIdx++;
+            // fade in (small timeout so the transition reliably triggers, even in background tabs)
+            setTimeout(() => { poetryEl.style.opacity = '1'; }, 40);
+            const hold = 9000;          // stay ~9s
+            setTimeout(() => { poetryEl.style.opacity = '0'; }, hold);
+            // schedule next: after fade-out (3s) + a long quiet gap
+            const gap = 14000 + Math.random() * 12000;   // 14–26s of silence
+            setTimeout(showFragment, hold + 3000 + gap);
+        }
+
+        setTimeout(showFragment, 5000);
     </script>
 </body>
 </html>
