@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Milano — Countdown</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #FAFAFA;
+            color: #000000;
+            letter-spacing: -0.02em;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Pure thin Apple line */
+        .hairline {
+            background-color: #E5E5EA;
+            height: 1px;
+            width: 100%;
+        }
+
+        /* Flight path dashed line animation */
+        @keyframes routeFlow {
+            to { stroke-dashoffset: 16; }
+        }
+        .flight-line {
+            stroke-dasharray: 4, 4;
+            animation: routeFlow 1.5s linear infinite;
+        }
+
+        /* Language toggle */
+        .lang-toggle {
+            display: inline-flex;
+            border: 1px solid #E5E5EA;
+            border-radius: 999px;
+            overflow: hidden;
+            background: #fff;
+        }
+        .lang-toggle button {
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.08em;
+            padding: 4px 12px;
+            color: #8E8E93;
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .lang-toggle button.active {
+            background: #000;
+            color: #fff;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-6 max-w-md mx-auto">
+
+    <header class="text-center pt-8 relative">
+        <div class="absolute right-0 top-6">
+            <div class="lang-toggle">
+                <button id="btn-en" onclick="setLang('en')" class="active">EN</button>
+                <button id="btn-it" onclick="setLang('it')">IT</button>
+            </div>
+        </div>
+        <span id="eyebrow" class="text-[11px] font-medium tracking-[0.15em] text-zinc-400 uppercase">COUNTDOWN</span>
+        <h1 class="text-3xl font-light tracking-tight text-zinc-900 mt-1">Milano</h1>
+    </header>
+
+    <section class="my-auto py-6">
+        <div class="grid grid-cols-4 gap-2 text-center">
+            <div>
+                <div id="days" class="text-5xl font-extralight tracking-tighter tabular-nums text-black">00</div>
+                <div id="lbl-days" class="text-[10px] font-normal text-zinc-400 mt-1">days</div>
+            </div>
+            <div>
+                <div id="hours" class="text-5xl font-extralight tracking-tighter tabular-nums text-black">00</div>
+                <div id="lbl-hours" class="text-[10px] font-normal text-zinc-400 mt-1">hours</div>
+            </div>
+            <div>
+                <div id="minutes" class="text-5xl font-extralight tracking-tighter tabular-nums text-black">00</div>
+                <div id="lbl-minutes" class="text-[10px] font-normal text-zinc-400 mt-1">minutes</div>
+            </div>
+            <div>
+                <div id="seconds" class="text-5xl font-extralight tracking-tighter tabular-nums text-zinc-300">00</div>
+                <div id="lbl-seconds" class="text-[10px] font-normal text-zinc-400 mt-1">seconds</div>
+            </div>
+        </div>
+
+        <div class="hairline my-8"></div>
+
+        <div id="subtitle" class="text-center text-[11px] text-zinc-400 font-light">
+            Friday, 22:00 (Italy Time)
+        </div>
+    </section>
+
+    <section class="w-full mb-12">
+        <div class="relative w-full aspect-[4/3] bg-white border border-zinc-100 rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+
+            <svg id="map" class="w-full h-full" viewBox="0 0 600 450" xmlns="http://www.w3.org/2000/svg">
+                <path d="M 80,380 L 180,410 L 240,360 L 290,290 L 240,250 L 150,260 Z" fill="none" stroke="#F2F2F7" stroke-width="1" />
+                <path d="M 160,210 C 180,240 210,300 280,380 C 260,370 210,310 180,260 Z" fill="none" stroke="#E5E5EA" stroke-width="1" />
+                <path d="M 380,150 L 460,140 L 490,185 L 420,210 L 370,180 Z" fill="none" stroke="#F2F2F7" stroke-width="1" />
+
+                <path d="M 460 170 Q 330 140 200 250" fill="none" stroke="#E5E5EA" stroke-width="1" />
+                <path d="M 460 170 Q 330 140 200 250" class="flight-line" fill="none" stroke="#8E8E93" stroke-width="1" />
+
+                <circle cx="460" cy="170" r="3" fill="#FFFFFF" stroke="#000000" stroke-width="1" />
+                <text x="460" y="155" text-anchor="middle" class="text-[10px] font-normal fill-zinc-400">Budapest</text>
+
+                <circle cx="200" cy="250" r="3" fill="#000000" />
+                <text x="200" y="270" text-anchor="middle" class="text-[10px] font-medium fill-black">Milano</text>
+
+                <g id="airplane" transform="translate(460, 170)">
+                    <g transform="scale(0.8) translate(-10, -10)">
+                        <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" fill="#000000"/>
+                    </g>
+                </g>
+            </svg>
+
+        </div>
+    </section>
+
+    <script>
+        /* ── Translations (English / Italian) ── */
+        const T = {
+            en: {
+                eyebrow: 'COUNTDOWN',
+                days: 'days', hours: 'hours', minutes: 'minutes', seconds: 'seconds',
+                subtitle: 'Friday, 22:00 (Italy Time)',
+                arrived: 'Landed in Milano 🛬'
+            },
+            it: {
+                eyebrow: 'CONTO ALLA ROVESCIA',
+                days: 'giorni', hours: 'ore', minutes: 'minuti', seconds: 'secondi',
+                subtitle: 'Venerdì, 22:00 (ora italiana)',
+                arrived: 'Atterrato a Milano 🛬'
+            }
+        };
+
+        let lang = localStorage.getItem('milano-lang') || 'en';
+        let arrived = false;
+
+        function setLang(l) {
+            lang = l;
+            localStorage.setItem('milano-lang', l);
+            document.documentElement.lang = l;
+            document.getElementById('btn-en').classList.toggle('active', l === 'en');
+            document.getElementById('btn-it').classList.toggle('active', l === 'it');
+            applyLabels();
+        }
+
+        function applyLabels() {
+            const t = T[lang];
+            document.getElementById('eyebrow').textContent = t.eyebrow;
+            document.getElementById('lbl-days').textContent = t.days;
+            document.getElementById('lbl-hours').textContent = t.hours;
+            document.getElementById('lbl-minutes').textContent = t.minutes;
+            document.getElementById('lbl-seconds').textContent = t.seconds;
+            document.getElementById('subtitle').textContent = arrived ? t.arrived : t.subtitle;
+        }
+
+        /* ── Timezone helpers: build a UTC instant from an Italy (Europe/Rome) wall-clock time, DST-aware ── */
+        function romeParts(date) {
+            const dtf = new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'Europe/Rome', hour12: false,
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+            const p = {};
+            for (const { type, value } of dtf.formatToParts(date)) p[type] = value;
+            // '24' can appear at midnight in some engines — normalize
+            if (p.hour === '24') p.hour = '00';
+            return {
+                year: +p.year, month: +p.month, day: +p.day,
+                hour: +p.hour, minute: +p.minute, second: +p.second
+            };
+        }
+
+        // How many ms Rome is ahead of UTC at a given UTC instant.
+        function romeOffset(utcMillis) {
+            const p = romeParts(new Date(utcMillis));
+            const asIfUTC = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+            return asIfUTC - utcMillis;
+        }
+
+        // Convert a Rome wall-clock time (y, m[1-12], d, h, mi, s) to a UTC timestamp.
+        function romeWallToUTC(y, m, d, h, mi, s) {
+            const naive = Date.UTC(y, m - 1, d, h, mi, s);
+            let utc = naive - romeOffset(naive);      // first approximation
+            utc = naive - romeOffset(utc);            // refine across DST edges
+            return utc;
+        }
+
+        // Next Friday 22:00 Italy time, relative to `now`.
+        function getTarget(now) {
+            const r = romeParts(now);
+            const weekday = new Date(Date.UTC(r.year, r.month - 1, r.day)).getUTCDay(); // 0=Sun … 5=Fri
+            let add = (5 - weekday + 7) % 7;
+            const pastCutoff = r.hour > 22 || (r.hour === 22 && (r.minute > 0 || r.second > 0));
+            if (add === 0 && pastCutoff) add = 7;
+            let target = romeWallToUTC(r.year, r.month - 1 + 1, r.day + add, 22, 0, 0);
+            if (target <= now.getTime()) target = romeWallToUTC(r.year, r.month, r.day + add + 7, 22, 0, 0);
+            return target;
+        }
+
+        let targetTime = getTarget(new Date());
+        let startTime = targetTime - 7 * 24 * 60 * 60 * 1000; // journey spans the final week
+
+        // SVG bezier for airplane position
+        const p0 = { x: 460, y: 170 }, p1 = { x: 330, y: 140 }, p2 = { x: 200, y: 250 };
+        function getBezierPoint(t) {
+            const x = (1 - t) * (1 - t) * p0.x + 2 * (1 - t) * t * p1.x + t * t * p2.x;
+            const y = (1 - t) * (1 - t) * p0.y + 2 * (1 - t) * t * p1.y + t * t * p2.y;
+            const dx = 2 * (1 - t) * (p1.x - p0.x) + 2 * t * (p2.x - p1.x);
+            const dy = 2 * (1 - t) * (p1.y - p0.y) + 2 * t * (p2.y - p1.y);
+            let angle = Math.atan2(dy, dx) * 180 / Math.PI + 180;
+            return { x, y, angle };
+        }
+
+        function updateCountdown() {
+            const now = Date.now();
+
+            // Recompute the target once we pass it (rolls over to the next Friday automatically).
+            if (now > targetTime) {
+                const next = getTarget(new Date());
+                if (next > now) {
+                    targetTime = next;
+                    startTime = targetTime - 7 * 24 * 60 * 60 * 1000;
+                    arrived = false;
+                }
+            }
+
+            let diff = targetTime - now;
+            let progress = (now - startTime) / (targetTime - startTime);
+            progress = Math.min(1, Math.max(0, progress));
+
+            if (diff <= 0) { diff = 0; progress = 1; arrived = true; }
+            else { arrived = false; }
+
+            const days = Math.floor(diff / 86400000);
+            const hours = Math.floor((diff % 86400000) / 3600000);
+            const minutes = Math.floor((diff % 3600000) / 60000);
+            const seconds = Math.floor((diff % 60000) / 1000);
+
+            document.getElementById('days').textContent = String(days).padStart(2, '0');
+            document.getElementById('hours').textContent = String(hours).padStart(2, '0');
+            document.getElementById('minutes').textContent = String(minutes).padStart(2, '0');
+            document.getElementById('seconds').textContent = String(seconds).padStart(2, '0');
+
+            document.getElementById('subtitle').textContent = arrived ? T[lang].arrived : T[lang].subtitle;
+
+            const pos = getBezierPoint(progress);
+            document.getElementById('airplane')
+                .setAttribute('transform', `translate(${pos.x}, ${pos.y}) rotate(${pos.angle})`);
+        }
+
+        setLang(lang);
+        updateCountdown();
+        setInterval(updateCountdown, 1000);
+    </script>
+</body>
+</html>
