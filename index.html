@@ -6,6 +6,8 @@
     <title>Milano — Countdown</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <style>
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -198,7 +200,7 @@
         </div>
     </section>
 
-    <button id="devTestBtn" onclick="animateBalloonRelease()" title="Preview balloon animation">🎈 Test</button>
+    <button id="devTestBtn" onclick="broadcastBalloon()" title="Release the balloon for everyone on the site">🎈 Test</button>
 
     <script>
         /* ── Translations (English / Italian) ── */
@@ -469,6 +471,35 @@
         setBalloon(BALLOON_REST.x, BALLOON_REST.y, 0);
         setRestString();
         scheduleNextRelease();
+
+        /* ── Shared trigger: pressing Test flies the balloon for EVERYONE on the site.
+              Uses the existing Firebase project; a single counter doc is the signal. ── */
+        const FB_CONFIG = {
+            apiKey: "AIzaSyDOpyzVs2XKi2QRxLnpEUu3rM7A0VO1N80",
+            authDomain: "eduai-planner-1b6ac.firebaseapp.com",
+            projectId: "eduai-planner-1b6ac",
+            storageBucket: "eduai-planner-1b6ac.firebasestorage.app",
+            messagingSenderId: "821536586016",
+            appId: "1:821536586016:web:fb0452985ba41563daff45"
+        };
+        let balloonDoc = null, seenN = null;
+        try {
+            firebase.initializeApp(FB_CONFIG);
+            balloonDoc = firebase.firestore().collection('milano').doc('balloon');
+            balloonDoc.onSnapshot(snap => {
+                const n = (snap.data() || {}).n || 0;
+                if (seenN === null) { seenN = n; return; }   // first snapshot: set baseline, don't replay
+                if (n !== seenN) { seenN = n; animateBalloonRelease(); }
+            }, () => {});
+        } catch (e) { balloonDoc = null; }
+
+        // Called by the Test button: animate locally now, and broadcast to everyone else.
+        function broadcastBalloon() {
+            animateBalloonRelease();
+            if (balloonDoc) {
+                balloonDoc.set({ n: firebase.firestore.FieldValue.increment(1) }, { merge: true }).catch(() => {});
+            }
+        }
 
         /* ── Private preview button ──
            Enable once by opening the page with #dev (persists on this browser only);
