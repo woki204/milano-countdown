@@ -143,6 +143,12 @@
         @keyframes presenceBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
         #presence.on { opacity: 1; }
 
+        /* Both-online: soft red halos on the cities + the flight line warms to red */
+        @keyframes haloPulse { 0%, 100% { opacity: 0.22; } 50% { opacity: 0.9; } }
+        #halo-it.halo-on, #halo-hu.halo-on { animation: haloPulse 2.6s ease-in-out infinite; }
+        #map .flight-line { transition: stroke 1.2s ease; }
+        #map.both-online .flight-line { stroke: #c0202a; }
+
         /* Pulse the Budapest counter when a Hungarian visitor arrives */
         @keyframes seenPulse { 0%, 100% {} 35% { fill: #8B0000; font-weight: 500; } }
         #seen-hu.pulse { animation: seenPulse 1.5s ease; }
@@ -218,6 +224,10 @@
                         <stop offset="55%" stop-color="#c81f1f" />
                         <stop offset="100%" stop-color="#7d0202" />
                     </linearGradient>
+                    <radialGradient id="haloGrad">
+                        <stop offset="0%" stop-color="#e0303a" stop-opacity="0.55" />
+                        <stop offset="100%" stop-color="#e0303a" stop-opacity="0" />
+                    </radialGradient>
                 </defs>
                 <path d="M 80,380 L 180,410 L 240,360 L 290,290 L 240,250 L 150,260 Z" fill="none" stroke="#F2F2F7" stroke-width="1" />
                 <path d="M 160,210 C 180,240 210,300 280,380 C 260,370 210,310 180,260 Z" fill="none" stroke="#E5E5EA" stroke-width="1" />
@@ -226,10 +236,12 @@
                 <path d="M 460 170 Q 330 140 200 250" fill="none" stroke="#E5E5EA" stroke-width="1" />
                 <path d="M 460 170 Q 330 140 200 250" class="flight-line" fill="none" stroke="#8E8E93" stroke-width="1" />
 
+                <circle id="halo-hu" cx="460" cy="170" r="18" fill="url(#haloGrad)" opacity="0" />
                 <circle cx="460" cy="170" r="3" fill="#FFFFFF" stroke="#000000" stroke-width="1" />
                 <text x="460" y="155" text-anchor="middle" class="text-[10px] font-normal fill-zinc-400">Budapest</text>
                 <text id="seen-hu" x="460" y="143" text-anchor="middle" class="text-[8px] font-light fill-zinc-400">I saw you 0</text>
 
+                <circle id="halo-it" cx="200" cy="250" r="18" fill="url(#haloGrad)" opacity="0" />
                 <circle cx="200" cy="250" r="3" fill="#000000" />
                 <text x="200" y="270" text-anchor="middle" class="text-[10px] font-medium fill-black">Milano</text>
                 <text id="seen-it" x="200" y="283" text-anchor="middle" class="text-[8px] font-light fill-zinc-500">I saw you 0</text>
@@ -260,6 +272,8 @@
 
                 <!-- Floating place-name bubbles (amorphous, physics-driven; built by JS) -->
                 <g id="bubbles"></g>
+                <!-- Effects layer: mutual red squares meeting + confetti -->
+                <g id="fx"></g>
             </svg>
 
             <div id="poetry"></div>
@@ -637,6 +651,7 @@
             const loveDoc = db.collection('milano').doc('love');
             const presenceDoc = db.collection('milano').doc('presence');
             const notesDoc = db.collection('milano').doc('notes');
+            const pressDoc = db.collection('milano').doc('press');
             const otherOf = () => myCountry === 'IT' ? 'HU' : (myCountry === 'HU' ? 'IT' : null);
 
             // ── Visit counters ("I saw you") ──
@@ -673,24 +688,42 @@
                 if (balloonDoc) balloonDoc.set({ n: INC(1) }, { merge: true }).catch(() => {});  // fly for everyone
                 const f = myCountry === 'HU' ? 'HU' : 'IT';               // attribute the love (default Milano)
                 loveDoc.set({ [f]: INC(1) }, { merge: true }).catch(() => {});
+                pressDoc.set({ [f]: Date.now() }, { merge: true }).catch(() => {});  // for the mutual-meeting detector
             });
 
-            // ── (3) Live presence: "you're both here now" ──
+            // ── (3) Live presence: a clear, beautiful "you're both here" state ──
             const presenceEl = document.getElementById('presence');
+            const mapEl = document.getElementById('map');
+            const haloIt = document.getElementById('halo-it'), haloHu = document.getElementById('halo-hu');
+            presenceEl.textContent = 'You’re both here, right now';
             function heartbeat() {
                 if (myCountry === 'IT' || myCountry === 'HU')
                     presenceDoc.set({ [myCountry]: Date.now() }, { merge: true }).catch(() => {});
             }
             function refreshPresence(d) {
-                const other = otherOf();
-                if (!other) { presenceEl.classList.remove('on'); return; }
-                presenceEl.textContent = `${other === 'HU' ? 'Budapest' : 'Milano'} is here, right now`;
-                presenceEl.classList.toggle('on', !!(d && d[other] && Date.now() - d[other] < 45000));
+                const now = Date.now();
+                const bothOnline = !!(d && d.IT && d.HU && now - d.IT < 45000 && now - d.HU < 45000);
+                presenceEl.classList.toggle('on', bothOnline);
+                mapEl.classList.toggle('both-online', bothOnline);
+                haloIt.classList.toggle('halo-on', bothOnline);
+                haloHu.classList.toggle('halo-on', bothOnline);
             }
             let lastPresence = {};
             presenceDoc.onSnapshot(snap => { lastPresence = snap.data() || {}; refreshPresence(lastPresence); }, () => {});
             countryReady.then(() => { heartbeat(); setInterval(heartbeat, 20000); });
             setInterval(() => refreshPresence(lastPresence), 15000);   // let a stale heartbeat fade out
+
+            // ── Mutual red square: both press together → two squares fly to meet → red confetti ──
+            let lastMeetKey = null;
+            pressDoc.onSnapshot(snap => {
+                const d = snap.data() || {};
+                const key = Math.max(d.IT || 0, d.HU || 0);
+                if (lastMeetKey === null) { lastMeetKey = key; return; }        // baseline: don't replay old presses
+                if (d.IT && d.HU && Math.abs(d.IT - d.HU) < 2600 && key > lastMeetKey) {
+                    lastMeetKey = key;
+                    playMeeting();
+                }
+            }, () => {});
 
             // ── (10) A note left in the sky: rises as the next bubble for the other ──
             const noteBar = document.getElementById('noteBar'), noteInput = document.getElementById('noteInput');
@@ -792,6 +825,7 @@
         const SVGNS = 'http://www.w3.org/2000/svg';
         const TAU = Math.PI * 2;
         const bubblesLayer = document.getElementById('bubbles');
+        const fxLayer = document.getElementById('fx');
         const bubbles = [];
         let lastPlace = -1;
 
@@ -930,6 +964,69 @@
             setTimeout(maybeSpawn, 2500 + Math.random() * 5500);   // random gaps → sometimes none
         }
         setTimeout(maybeSpawn, 1500);
+
+        /* ── Mutual red-square meeting + delicate confetti ── */
+        function makeRedSquare(sz) {
+            const g = document.createElementNS(SVGNS, 'g');
+            const r = document.createElementNS(SVGNS, 'rect');
+            r.setAttribute('x', -sz / 2); r.setAttribute('y', -sz / 2);
+            r.setAttribute('width', sz); r.setAttribute('height', sz); r.setAttribute('rx', '1.3');
+            r.setAttribute('fill', 'url(#balloonGrad)');
+            r.setAttribute('filter', 'drop-shadow(0 1px 2px rgba(139,0,0,0.25))');
+            g.appendChild(r);
+            return g;
+        }
+
+        function playMeeting() {
+            const dur = 1900;
+            const a = makeRedSquare(11), b = makeRedSquare(11);
+            fxLayer.appendChild(a); fxLayer.appendChild(b);
+            (function frame(now) {
+                if (!frame.t0) frame.t0 = now;
+                let p = (now - frame.t0) / dur; if (p > 1) p = 1;
+                const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;   // ease-in-out
+                const pa = getBezierPoint(1 - e * 0.5);    // Milano (t=1) → midpoint (t=0.5)
+                const pb = getBezierPoint(e * 0.5);         // Budapest (t=0) → midpoint (t=0.5)
+                const lift = Math.sin(p * Math.PI) * 7;
+                a.setAttribute('transform', `translate(${pa.x.toFixed(1)},${(pa.y - lift).toFixed(1)}) rotate(${(e * 90).toFixed(1)})`);
+                b.setAttribute('transform', `translate(${pb.x.toFixed(1)},${(pb.y - lift).toFixed(1)}) rotate(${(-e * 90).toFixed(1)})`);
+                if (p < 1) requestAnimationFrame(frame);
+                else { a.remove(); b.remove(); const m = getBezierPoint(0.5); burstConfetti(m.x, m.y - 7); }
+            })(performance.now());
+        }
+
+        function burstConfetti(cx, cy) {
+            const parts = [], N = 15;
+            for (let i = 0; i < N; i++) {
+                const sz = 2 + Math.random() * 3.4;
+                const el = document.createElementNS(SVGNS, 'rect');
+                el.setAttribute('width', sz); el.setAttribute('height', sz);
+                el.setAttribute('x', -sz / 2); el.setAttribute('y', -sz / 2); el.setAttribute('rx', '0.6');
+                if (Math.random() < 0.6) el.setAttribute('fill', 'url(#balloonGrad)');
+                else {
+                    el.setAttribute('fill', 'none'); el.setAttribute('stroke', '#8B0000');
+                    el.setAttribute('stroke-width', '0.7'); el.setAttribute('vector-effect', 'non-scaling-stroke');
+                }
+                fxLayer.appendChild(el);
+                const ang = Math.random() * TAU, spd = 14 + Math.random() * 34;
+                parts.push({ el, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd - 18,
+                    rot: Math.random() * 360, vrot: (Math.random() - 0.5) * 200, life: 1.3 + Math.random() * 0.8, dead: false });
+            }
+            (function frame(now) {
+                if (!frame.t0) frame.t0 = now;
+                const t = (now - frame.t0) / 1000;
+                let alive = false;
+                parts.forEach(p => {
+                    if (p.dead) return;
+                    if (t >= p.life) { p.el.remove(); p.dead = true; return; }
+                    alive = true;
+                    const x = cx + p.vx * t, y = cy + p.vy * t + 0.5 * 26 * t * t;   // gentle gravity
+                    p.el.setAttribute('transform', `translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${(p.rot + p.vrot * t).toFixed(1)})`);
+                    p.el.setAttribute('opacity', (Math.max(0, 1 - t / p.life) * 0.9).toFixed(2));
+                });
+                if (alive) requestAnimationFrame(frame);
+            })(performance.now());
+        }
     </script>
 </body>
 </html>
