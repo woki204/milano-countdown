@@ -85,6 +85,64 @@
             border-color: #8B0000;
         }
 
+        /* Love signal + note controls */
+        #controls {
+            display: flex; align-items: center; justify-content: center;
+            gap: 16px; flex-wrap: wrap; padding: 8px 0 2px;
+        }
+        #loveBtn {
+            border: none; background: none; cursor: pointer; padding: 5px 6px;
+            display: inline-flex; align-items: center; gap: 8px;
+            font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 400;
+            letter-spacing: 0.08em; text-transform: uppercase; color: #8E8E93;
+            transition: transform 0.15s ease, color 0.15s ease;
+        }
+        #loveBtn:hover { color: #8B0000; }
+        #loveBtn:active { transform: scale(0.88); }
+        #loveBtn .rs {
+            width: 16px; height: 16px; border-radius: 2px;
+            background: linear-gradient(#e83b3b, #7d0202);
+            box-shadow: 0 1px 3px rgba(139, 0, 0, 0.3);
+        }
+        #loveCounts {
+            font-family: 'Inter', sans-serif; font-size: 11px;
+            letter-spacing: 0.02em; color: #8E8E93; display: inline-flex; align-items: center; gap: 5px;
+        }
+        #loveCounts b { color: #8B0000; font-weight: 600; }
+        #loveCounts .sep { color: #D4D4D8; }
+        #loveCounts .rs-dot { width: 9px; height: 9px; border-radius: 1.5px; background: linear-gradient(#e83b3b, #7d0202); display: inline-block; }
+        #noteBtn {
+            border: 1px solid #E5E5EA; background: #fff; border-radius: 999px;
+            width: 26px; height: 26px; cursor: pointer; color: #8E8E93; font-size: 12px;
+            transition: color 0.15s ease, border-color 0.15s ease;
+        }
+        #noteBtn:hover { color: #8B0000; border-color: #8B0000; }
+        #noteBar { display: flex; justify-content: center; gap: 6px; padding: 2px 0 8px; }
+        #noteBar[hidden] { display: none; }
+        #noteInput {
+            width: min(72%, 20rem); border: none; border-bottom: 1px solid #E5E5EA;
+            padding: 5px 4px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 300;
+            color: #1a1a1a; outline: none; text-align: center; background: none;
+        }
+        #noteInput:focus { border-color: #8B0000; }
+        #noteSend { border: none; background: #8B0000; color: #fff; border-radius: 999px; width: 26px; height: 26px; cursor: pointer; font-size: 13px; }
+
+        /* Live presence: "you're both here now" */
+        #presence {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 300; letter-spacing: 0.05em;
+            color: #8B0000; background: rgba(255, 255, 255, 0.72); padding: 3px 12px; border-radius: 999px;
+            -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+            opacity: 0; transition: opacity 1s ease; pointer-events: none; white-space: nowrap;
+            display: flex; align-items: center; gap: 7px;
+        }
+        #presence::before {
+            content: ''; width: 6px; height: 6px; border-radius: 50%;
+            background: #34c759; box-shadow: 0 0 6px #34c759; animation: presenceBlink 2s ease-in-out infinite;
+        }
+        @keyframes presenceBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+        #presence.on { opacity: 1; }
+
         /* Pulse the Budapest counter when a Hungarian visitor arrives */
         @keyframes seenPulse { 0%, 100% {} 35% { fill: #8B0000; font-weight: 500; } }
         #seen-hu.pulse { animation: seenPulse 1.5s ease; }
@@ -205,9 +263,21 @@
             </svg>
 
             <div id="poetry"></div>
+            <div id="presence"></div>
 
         </div>
     </section>
+
+    <!-- Love signal (red square) + note-in-the-sky controls -->
+    <div id="controls">
+        <button id="loveBtn" title="Send a red square — I love you"><span class="rs"></span><span>send</span></button>
+        <div id="loveCounts"><span class="rs-dot"></span> Milano <b id="love-it">0</b> <span class="sep">·</span> Budapest <b id="love-hu">0</b></div>
+        <button id="noteBtn" title="Leave a line in the sky">✎</button>
+    </div>
+    <div id="noteBar" hidden>
+        <input id="noteInput" maxlength="60" placeholder="leave a line in the sky…" />
+        <button id="noteSend" title="Send">↑</button>
+    </div>
 
     <button id="devTestBtn" onclick="broadcastBalloon()" title="Release the balloon for everyone on the site">🎈 Test</button>
 
@@ -555,17 +625,26 @@
             setTimeout(() => el.classList.remove('pulse'), 1730);
         }
 
+        // Detect the viewer's country once; shared by visits, love, presence and notes.
+        let myCountry = null;
+        const countryReady = detectCountry().then(c => (myCountry = c)).catch(() => null);
+        const pendingNotes = [];   // notes from the other side, waiting to rise as bubbles
+
         try {
-            const visitsDoc = firebase.firestore().collection('milano').doc('visits');
+            const db = firebase.firestore();
+            const INC = n => firebase.firestore.FieldValue.increment(n);
+            const visitsDoc = db.collection('milano').doc('visits');
+            const loveDoc = db.collection('milano').doc('love');
+            const presenceDoc = db.collection('milano').doc('presence');
+            const notesDoc = db.collection('milano').doc('notes');
+            const otherOf = () => myCountry === 'IT' ? 'HU' : (myCountry === 'HU' ? 'IT' : null);
+
+            // ── Visit counters ("I saw you") ──
             const seenHu = document.getElementById('seen-hu');
             const seenIt = document.getElementById('seen-it');
-
-            // Show the last-known totals instantly so a refresh never flashes back to 0.
             const cHu = localStorage.getItem('milano-hu'), cIt = localStorage.getItem('milano-it');
             if (cHu !== null) seenHu.textContent = `I saw you ${cHu}`;
             if (cIt !== null) seenIt.textContent = `I saw you ${cIt}`;
-
-            // Live display of the latest accumulated totals (persisted forever in Firebase).
             let prevHu = null;
             visitsDoc.onSnapshot(snap => {
                 const d = snap.data() || {};
@@ -574,16 +653,78 @@
                 seenIt.textContent = `I saw you ${it}`;
                 localStorage.setItem('milano-hu', hu);
                 localStorage.setItem('milano-it', it);
-                // chime when a new Hungarian visitor arrives (not on the first/baseline snapshot)
                 if (prevHu !== null && hu > prevHu) notifyHungary();
                 prevHu = hu;
             }, () => {});
+            countryReady.then(() => {
+                const f = myCountry === 'HU' ? 'HU' : (myCountry === 'IT' ? 'IT' : null);
+                if (f) visitsDoc.set({ [f]: INC(1) }, { merge: true }).catch(() => {});
+            });
 
-            // Count every entry from a Hungarian or Italian IP — cumulative, never reset.
-            detectCountry().then(country => {
-                const field = country === 'HU' ? 'HU' : (country === 'IT' ? 'IT' : null);
-                if (field) visitsDoc.set({ [field]: firebase.firestore.FieldValue.increment(1) }, { merge: true }).catch(() => {});
-            }).catch(() => {});
+            // ── (1) Two-way red square: a love signal that flies on everyone's screen ──
+            loveDoc.onSnapshot(snap => {
+                const d = snap.data() || {};
+                document.getElementById('love-it').textContent = d.IT || 0;
+                document.getElementById('love-hu').textContent = d.HU || 0;
+            }, () => {});
+            document.getElementById('loveBtn').addEventListener('click', () => {
+                ensureAudio();
+                animateBalloonRelease();                                  // fly locally right away
+                if (balloonDoc) balloonDoc.set({ n: INC(1) }, { merge: true }).catch(() => {});  // fly for everyone
+                const f = myCountry === 'HU' ? 'HU' : 'IT';               // attribute the love (default Milano)
+                loveDoc.set({ [f]: INC(1) }, { merge: true }).catch(() => {});
+            });
+
+            // ── (3) Live presence: "you're both here now" ──
+            const presenceEl = document.getElementById('presence');
+            function heartbeat() {
+                if (myCountry === 'IT' || myCountry === 'HU')
+                    presenceDoc.set({ [myCountry]: Date.now() }, { merge: true }).catch(() => {});
+            }
+            function refreshPresence(d) {
+                const other = otherOf();
+                if (!other) { presenceEl.classList.remove('on'); return; }
+                presenceEl.textContent = `${other === 'HU' ? 'Budapest' : 'Milano'} is here, right now`;
+                presenceEl.classList.toggle('on', !!(d && d[other] && Date.now() - d[other] < 45000));
+            }
+            let lastPresence = {};
+            presenceDoc.onSnapshot(snap => { lastPresence = snap.data() || {}; refreshPresence(lastPresence); }, () => {});
+            countryReady.then(() => { heartbeat(); setInterval(heartbeat, 20000); });
+            setInterval(() => refreshPresence(lastPresence), 15000);   // let a stale heartbeat fade out
+
+            // ── (10) A note left in the sky: rises as the next bubble for the other ──
+            const noteBar = document.getElementById('noteBar'), noteInput = document.getElementById('noteInput');
+            document.getElementById('noteBtn').addEventListener('click', () => {
+                noteBar.hidden = !noteBar.hidden;
+                if (!noteBar.hidden) noteInput.focus();
+            });
+            function sendNote() {
+                const text = noteInput.value.trim();
+                if (!text) return;
+                const from = myCountry === 'HU' ? 'HU' : 'IT';
+                notesDoc.set({ list: firebase.firestore.FieldValue.arrayUnion({ text, from, ts: Date.now() }) }, { merge: true }).catch(() => {});
+                noteInput.value = ''; noteBar.hidden = true;
+            }
+            document.getElementById('noteSend').addEventListener('click', sendNote);
+            noteInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendNote(); });
+
+            let notesSeenTs = +(localStorage.getItem('milano-notes-seen') || 0);
+            countryReady.then(() => {
+                if (!otherOf()) return;   // notes are private to the two of them
+                notesDoc.onSnapshot(snap => {
+                    const other = otherOf();
+                    const list = (snap.data() || {}).list || [];
+                    let maxTs = notesSeenTs;
+                    list.forEach(nt => {
+                        if (nt && nt.from === other && nt.ts > notesSeenTs) {
+                            pendingNotes.push(nt.text);
+                            if (nt.ts > maxTs) maxTs = nt.ts;
+                        }
+                    });
+                    notesSeenTs = maxTs;
+                    localStorage.setItem('milano-notes-seen', String(notesSeenTs));
+                }, () => {});
+            });
         } catch (e) {}
 
         /* ── Private preview button ──
@@ -649,8 +790,9 @@
         const bubbles = [];
         let lastPlace = -1;
 
-        function wrapName(name) {
-            const words = name.split(' '), max = 15, lines = [];
+        function wrapName(name, max) {
+            max = max || 15;
+            const words = name.split(' '), lines = [];
             let cur = '';
             for (const w of words) {
                 if (cur && (cur + ' ' + w).length > max) { lines.push(cur); cur = w; }
@@ -673,25 +815,29 @@
             return d + 'Z';
         }
 
-        function spawnBubble() {
-            let idx; do { idx = Math.floor(Math.random() * PLACES.length); } while (idx === lastPlace && PLACES.length > 1);
-            lastPlace = idx;
-            const name = PLACES[idx];
+        function spawnBubble(noteText) {
+            const isNote = !!noteText;
+            let name;
+            if (isNote) name = noteText;
+            else {
+                let idx; do { idx = Math.floor(Math.random() * PLACES.length); } while (idx === lastPlace && PLACES.length > 1);
+                lastPlace = idx; name = PLACES[idx];
+            }
 
             const g = document.createElementNS(SVGNS, 'g');
             const blob = document.createElementNS(SVGNS, 'path');
-            blob.setAttribute('fill', 'rgba(255,255,255,0.6)');
-            blob.setAttribute('stroke', '#141414');
-            blob.setAttribute('stroke-width', '0.8');
+            blob.setAttribute('fill', isNote ? 'rgba(255,244,244,0.78)' : 'rgba(255,255,255,0.6)');
+            blob.setAttribute('stroke', isNote ? '#8B0000' : '#141414');
+            blob.setAttribute('stroke-width', isNote ? '1' : '0.8');
             blob.setAttribute('vector-effect', 'non-scaling-stroke');
             const text = document.createElementNS(SVGNS, 'text');
             text.setAttribute('text-anchor', 'middle');
-            text.setAttribute('fill', '#1a1a1a');
-            const fs = 9.5 + Math.random() * 2.5;
+            text.setAttribute('fill', isNote ? '#8B0000' : '#1a1a1a');
+            const fs = isNote ? 11 : (9.5 + Math.random() * 2.5);
             text.setAttribute('font-size', fs.toFixed(1));
             text.setAttribute('font-family', "'Inter', sans-serif");
-            text.setAttribute('font-weight', '300');
-            const lines = wrapName(name), lh = fs * 1.15;
+            text.setAttribute('font-weight', isNote ? '400' : '300');
+            const lines = wrapName(name, isNote ? 20 : 15), lh = fs * 1.2;
             lines.forEach((ln, i) => {
                 const ts = document.createElementNS(SVGNS, 'tspan');
                 ts.setAttribute('x', '0');
@@ -705,7 +851,7 @@
             // size the blob to fit the (measured) text block
             const bb = text.getBBox();
             const padX = 11 + Math.random() * 9, padY = 9 + Math.random() * 7;
-            const grow = 1 + Math.random() * 0.25;
+            const grow = isNote ? 1.15 : (1 + Math.random() * 0.25);
             let rx = (bb.width / 2 + padX) * grow;
             let ry = (bb.height / 2 + padY) * grow;
             ry = Math.max(ry, rx * 0.6);
@@ -716,17 +862,17 @@
 
             bubbles.push({
                 g, blob, name,
-                x0: 100 + Math.random() * 350,               // start x
-                y0: 404 + Math.random() * 14,                // start y (bottom)
-                vy: -(14 + Math.random() * 16),              // rise speed (units/s)
-                driftX: (Math.random() - 0.5) * 8,           // slow lateral drift
-                swayAmp: 5 + Math.random() * 16,             // side-to-side sway
+                x0: isNote ? (200 + Math.random() * 120) : (100 + Math.random() * 350),
+                y0: 404 + Math.random() * 14,
+                vy: isNote ? -(9 + Math.random() * 5) : -(14 + Math.random() * 16),   // notes rise slower
+                driftX: (Math.random() - 0.5) * (isNote ? 4 : 8),
+                swayAmp: (isNote ? 4 : 5) + Math.random() * (isNote ? 7 : 16),
                 swayFreq: 0.3 + Math.random() * 0.6,
                 swayPhase: Math.random() * TAU,
                 rx, ry, P, wFreq, wPhase,
-                wAmp: 0.1 + Math.random() * 0.07,            // amorphous wobble amount
-                maxOp: 0.82 + Math.random() * 0.14,
-                popY: 110 + Math.random() * 150,             // dissolve height (varies)
+                wAmp: (isNote ? 0.07 : 0.1) + Math.random() * 0.06,
+                maxOp: isNote ? 0.96 : (0.82 + Math.random() * 0.14),
+                popY: isNote ? (80 + Math.random() * 60) : (110 + Math.random() * 150),   // notes travel higher
                 birth: performance.now(),
                 dissolving: false, dissolveAt: 0, dead: false
             });
@@ -770,7 +916,9 @@
         requestAnimationFrame(tickBubbles);
 
         function maybeSpawn() {
-            if (bubbles.length < 3 && Math.random() < 0.7) {
+            if (pendingNotes.length && bubbles.length < 3) {
+                spawnBubble(pendingNotes.shift());                 // a note from the other rises first
+            } else if (bubbles.length < 3 && Math.random() < 0.7) {
                 spawnBubble();
                 if (bubbles.length < 3 && Math.random() < 0.22) spawnBubble();  // occasionally a pair
             }
