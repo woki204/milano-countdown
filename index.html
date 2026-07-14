@@ -85,6 +85,10 @@
             border-color: #8B0000;
         }
 
+        /* Pulse the Budapest counter when a Hungarian visitor arrives */
+        @keyframes seenPulse { 0%, 100% {} 35% { fill: #8B0000; font-weight: 500; } }
+        #seen-hu.pulse { animation: seenPulse 1.5s ease; }
+
         /* Drifting text fragments — extreme minimalist, lots of breathing space */
         #poetry {
             position: absolute;
@@ -515,6 +519,42 @@
                     .then(r => r.json()).then(d => d && d.country_code));
         }
 
+        /* ── Audio chime for a new Hungarian arrival ──
+           Browsers block sound until the user interacts, so we unlock the audio on the
+           first click/keypress/touch; after that the chime plays on every new HU entry. ── */
+        let audioCtx = null;
+        function ensureAudio() {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+            } catch (e) {}
+        }
+        ['pointerdown', 'keydown', 'touchstart'].forEach(ev => window.addEventListener(ev, ensureAudio));
+
+        function playChime() {
+            ensureAudio();
+            if (!audioCtx || audioCtx.state !== 'running') return;   // not unlocked yet
+            const now = audioCtx.currentTime;
+            [880, 1174.7, 1567.98].forEach((f, i) => {                // a soft rising 3-note bell
+                const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+                o.type = 'sine'; o.frequency.value = f;
+                o.connect(g); g.connect(audioCtx.destination);
+                const t = now + i * 0.13;
+                g.gain.setValueAtTime(0.0001, t);
+                g.gain.exponentialRampToValueAtTime(0.2, t + 0.02);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+                o.start(t); o.stop(t + 0.75);
+            });
+        }
+
+        function notifyHungary() {
+            playChime();
+            const el = document.getElementById('seen-hu');
+            el.classList.remove('pulse');
+            setTimeout(() => el.classList.add('pulse'), 30);      // restart the pulse animation
+            setTimeout(() => el.classList.remove('pulse'), 1730);
+        }
+
         try {
             const visitsDoc = firebase.firestore().collection('milano').doc('visits');
             const seenHu = document.getElementById('seen-hu');
@@ -526,6 +566,7 @@
             if (cIt !== null) seenIt.textContent = `I saw you ${cIt}`;
 
             // Live display of the latest accumulated totals (persisted forever in Firebase).
+            let prevHu = null;
             visitsDoc.onSnapshot(snap => {
                 const d = snap.data() || {};
                 const hu = d.HU || 0, it = d.IT || 0;
@@ -533,6 +574,9 @@
                 seenIt.textContent = `I saw you ${it}`;
                 localStorage.setItem('milano-hu', hu);
                 localStorage.setItem('milano-it', it);
+                // chime when a new Hungarian visitor arrives (not on the first/baseline snapshot)
+                if (prevHu !== null && hu > prevHu) notifyHungary();
+                prevHu = hu;
             }, () => {});
 
             // Count every entry from a Hungarian or Italian IP — cumulative, never reset.
