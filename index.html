@@ -520,23 +520,26 @@
             const seenHu = document.getElementById('seen-hu');
             const seenIt = document.getElementById('seen-it');
 
-            // Live display of the latest accumulated totals.
+            // Show the last-known totals instantly so a refresh never flashes back to 0.
+            const cHu = localStorage.getItem('milano-hu'), cIt = localStorage.getItem('milano-it');
+            if (cHu !== null) seenHu.textContent = `I saw you ${cHu}`;
+            if (cIt !== null) seenIt.textContent = `I saw you ${cIt}`;
+
+            // Live display of the latest accumulated totals (persisted forever in Firebase).
             visitsDoc.onSnapshot(snap => {
                 const d = snap.data() || {};
-                seenHu.textContent = `I saw you ${d.HU || 0}`;
-                seenIt.textContent = `I saw you ${d.IT || 0}`;
+                const hu = d.HU || 0, it = d.IT || 0;
+                seenHu.textContent = `I saw you ${hu}`;
+                seenIt.textContent = `I saw you ${it}`;
+                localStorage.setItem('milano-hu', hu);
+                localStorage.setItem('milano-it', it);
             }, () => {});
 
-            // Count this visit once per browser session (a refresh doesn't inflate the total).
-            if (!sessionStorage.getItem('milano-visit-counted')) {
-                detectCountry().then(country => {
-                    const field = country === 'HU' ? 'HU' : (country === 'IT' ? 'IT' : null);
-                    if (field) {
-                        visitsDoc.set({ [field]: firebase.firestore.FieldValue.increment(1) }, { merge: true }).catch(() => {});
-                    }
-                    sessionStorage.setItem('milano-visit-counted', '1');
-                }).catch(() => {});
-            }
+            // Count every entry from a Hungarian or Italian IP — cumulative, never reset.
+            detectCountry().then(country => {
+                const field = country === 'HU' ? 'HU' : (country === 'IT' ? 'IT' : null);
+                if (field) visitsDoc.set({ [field]: firebase.firestore.FieldValue.increment(1) }, { merge: true }).catch(() => {});
+            }).catch(() => {});
         } catch (e) {}
 
         /* ── Private preview button ──
